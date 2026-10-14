@@ -1,0 +1,30 @@
+{
+    "authors": [
+        {
+            "email": "info@wicket.io",
+            "homepage": "https://wicket.io",
+            "name": "Wicket Inc."
+        }
+    ],
+    "config": {
+        "platform-check": false,
+        "sort-packages": true
+    },
+    "description": "Populates Gravity Forms address state/province dropdowns client-side from a cached country divisions dataset, with a failsafe-managed loading state.",
+    "homepage": "https://github.com/industrialdev/wicket-wp-gf-dynamic-country-state",
+    "keywords": [
+        "wordpress",
+        "gravity-forms",
+        "address",
+        "wicket"
+    ],
+    "type": "wordpress-plugin",
+    "license": "GPL-2.0-or-later",
+    "minimum-stability": "stable",
+    "name": "industrialdev/wicket-wp-gf-dynamic-country-state",
+    "prefer-stable": true,
+    "require": {
+        "php": ">=8.2",
+        "rinvex/countries": "^9.0"
+    }
+}

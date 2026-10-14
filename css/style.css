@@ -1,0 +1,100 @@
+/* Loading animations and basic styling for country/state fields */
+.ginput_address_state.loading,
+.ginput_address_country.loading {
+  position: relative;
+}
+
+/* Loading animations for country/state fields */
+.ginput_address_country.loading::after,
+.ginput_address_state.loading::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(255, 255, 255, 0.7);
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.ginput_address_country.loading::before,
+.ginput_address_state.loading::before {
+  content: "";
+  position: absolute;
+  top: calc(50% - 12px);
+  left: calc(50% - 12px);
+  width: 24px;
+  height: 24px;
+  border: 3px solid rgba(0, 0, 0, 0.1);
+  border-top-color: #3498db;
+  border-radius: 50%;
+  z-index: 11;
+  animation: gf-address-spinner 0.8s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes gf-address-spinner {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Pre-loading animation for uninitialized address fields */
+.ginput_address_country:not(.initialized),
+.ginput_address_state:not(.initialized) {
+  position: relative;
+}
+
+.ginput_address_country:not(.initialized)::after,
+.ginput_address_state:not(.initialized)::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(255, 255, 255, 0.7);
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.ginput_address_country:not(.initialized)::before,
+.ginput_address_state:not(.initialized)::before {
+  content: "";
+  position: absolute;
+  top: calc(50% - 12px);
+  left: calc(50% - 12px);
+  width: 24px;
+  height: 24px;
+  border: 3px solid rgba(0, 0, 0, 0.1);
+  border-top-color: #3498db;
+  border-radius: 50%;
+  z-index: 11;
+  animation: gf-address-spinner 0.8s linear infinite;
+  pointer-events: none;
+}
+
+/* Hide loading indicators when feature is disabled */
+body:not(.gf-dynamic-states-feature-loading) .ginput_address_country.loading::before,
+body:not(.gf-dynamic-states-feature-loading) .ginput_address_state.loading::before,
+body:not(.gf-dynamic-states-feature-loading) .ginput_address_country.loading::after,
+body:not(.gf-dynamic-states-feature-loading) .ginput_address_state.loading::after,
+body:not(.gf-dynamic-states-feature-loading) .ginput_address_country:not(.initialized)::before,
+body:not(.gf-dynamic-states-feature-loading) .ginput_address_state:not(.initialized)::before,
+body:not(.gf-dynamic-states-feature-loading) .ginput_address_country:not(.initialized)::after,
+body:not(.gf-dynamic-states-feature-loading) .ginput_address_state:not(.initialized)::after {
+  display: none !important;
+  content: none !important;
+  animation: none !important;
+  border: none !important;
+  background: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+}

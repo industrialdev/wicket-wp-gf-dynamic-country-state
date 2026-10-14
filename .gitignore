@@ -1,0 +1,14 @@
+vendor/
+node_modules/
+composer.lock.bak
+.php-cs-fixer.cache
+.DS_Store
+*.log
+error_log
+debug.log
+*.zip
+tmp/
+*.tmp
+*.bak
+*.swp
+*~
