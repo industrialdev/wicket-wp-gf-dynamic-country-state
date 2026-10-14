@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Wicket GF Dynamic Country/State
  * Description: Adds dynamic state/province dropdowns to Gravity Forms address fields
- * Version: 1.0.0
+ * Version: 1.0.1
  * Plugin URI: https://wicket.io
  * Author: Wicket Inc.
  * Author URI: https://wicket.io
@@ -41,7 +41,8 @@ class GF_Dynamic_States {
     }
 
     public function register_addon() {
-        $this->maybe_load_states_cache();
+        // States cache loads lazily inside the AJAX path: the all-countries payload is multi-MB
+        // and a per-request load showed up as slow page loads on Pantheon
 
         // Check if GFAddOn class exists
         if (!class_exists('GFAddOn')) {
@@ -206,23 +207,14 @@ class GF_Dynamic_States {
     private function get_states_by_country($country_code) {
         $country_code = strtoupper($country_code);
 
-        // Check if we have states in object cache
-        if (!empty($this->states_cache[$country_code])) {
-            return $this->states_cache[$country_code];
-        }
-
-        // Try loading from transient if object cache empty
         if (empty($this->states_cache)) {
             $cache = get_transient('gf_all_states_cache');
-            if ($cache !== false) {
-                $this->states_cache = $cache;
-
-                return $this->states_cache[$country_code] ?? array();
-            }
+            $this->states_cache = is_array($cache) ? $cache : array();
         }
 
-        // If still no cache, rebuild it
-        $this->maybe_load_states_cache();
+        if (empty($this->states_cache)) {
+            $this->maybe_load_states_cache();
+        }
 
         return $this->states_cache[$country_code] ?? array();
     }
@@ -433,6 +425,7 @@ class GF_Dynamic_States {
     public function add_diagnostic_page() {
         // Only if we're on the settings page and it's a blank screen
         if (is_admin() &&
+            current_user_can('manage_options') &&
             isset($_GET['subview']) &&
             $_GET['subview'] == 'gf-state-dropdowns' &&
             isset($_GET['page']) &&
@@ -473,7 +466,7 @@ class GF_Dynamic_States {
 
                 <h2>Form Information</h2>
                 <?php
-                $form_id = $_GET['id'];
+                $form_id = absint($_GET['id']);
                 try {
                     $form = GFAPI::get_form($form_id);
                     echo '<p class="success">Form loaded successfully</p>';

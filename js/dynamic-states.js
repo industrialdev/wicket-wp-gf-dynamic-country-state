@@ -188,26 +188,17 @@ jQuery(document).ready(function($) {
 
   // Helper function to hide loading indicator
   function hideLoading($container, force) {
-    // Don't hide loading if AJAX is still in progress, unless forced
-    if (ajaxInProgress && !force) {
-      wt_gfas_debug("Not hiding loading because AJAX is still in progress");
-      return;
-    }
-
     if ($container && $container.length) {
       // Mark as initialized first, then remove loading
       $container.addClass('initialized');
       // Short delay to ensure transitions look smooth
       setTimeout(function() {
-        // Check AJAX again before actually removing loading, unless forced
-        if (!ajaxInProgress || force) {
-          $container.removeClass('loading');
-          // Ensure the field is enabled for form validation
-          var $stateField = $container.find('input, select');
-          if ($stateField.length) {
-            $stateField.prop('disabled', false);
-            wt_gfas_debug("Ensured field is enabled for validation:", $stateField.attr('id'));
-          }
+        $container.removeClass('loading');
+        // Ensure the field is enabled for form validation
+        var $stateField = $container.find('input, select');
+        if ($stateField.length) {
+          $stateField.prop('disabled', false);
+          wt_gfas_debug("Ensured field is enabled for validation:", $stateField.attr('id'));
         }
       }, force ? 0 : 50);
     }
@@ -764,7 +755,12 @@ jQuery(document).ready(function($) {
       },
       error: function() {
         wt_gfas_debug("AJAX error occurred (global prefetch)");
+        ajaxInProgress = false;
         initializeForms();
+        // A failed prefetch never repopulates anything, so GF's native selects must stay usable
+        $('.ginput_address_country, .ginput_address_state').each(function() {
+          hideLoading($(this), true);
+        });
       },
       complete: function() {
         wt_gfas_debug("AJAX request complete (global prefetch) - clearing ajaxInProgress flag");
@@ -1028,54 +1024,30 @@ jQuery(document).ready(function($) {
     }
   });
 
-  // Primary failsafe - runs after 5 seconds
-  setTimeout(function() {
+  // Recurring failsafe: one-shot timers left spinners stuck when a change happened after they had fired
+  setInterval(function() {
     $('.ginput_address_country, .ginput_address_state').each(function() {
       var $container = $(this);
 
-      if ($container.hasClass('loading')) {
-        wt_gfas_debug("Failsafe (5s): Field still loading after 5s, checking if it should be initialized:", $container.attr('class'));
+      if (!$container.hasClass('loading')) {
+        return;
+      }
 
-        var $field = $container.find('select, input');
-        if ($field.length) {
-          var fieldValue = $field.val();
-          var hasOptions = $field.is('select') && $field.find('option').length > 1;
+      var $field = $container.find('select, input');
+      if ($field.length) {
+        var fieldValue = $field.val();
+        var hasOptions = $field.is('select') && $field.find('option').length > 1;
 
-          // If field has a value or has options, it should be initialized
-          if (fieldValue || hasOptions || $field.is('input')) {
-            wt_gfas_debug("Failsafe (5s): Field should be initialized, forcing completion");
-            if (ajaxInProgress) {
-              wt_gfas_debug("AJAX appears stuck - forcing completion after 5s");
-              ajaxInProgress = false;
-            }
-            hideLoading($container, true);
+        if (fieldValue || hasOptions || $field.is('input')) {
+          wt_gfas_debug("Failsafe: forcing stuck loading field to initialized:", $field.attr('id') || 'unnamed');
+          if (ajaxInProgress) {
+            ajaxInProgress = false;
           }
+          hideLoading($container, true);
         }
       }
     });
   }, 5000);
-
-  // Secondary failsafe - runs after 15 seconds
-  setTimeout(function() {
-    $('.ginput_address_country, .ginput_address_state').each(function() {
-      var $container = $(this);
-
-      if ($container.hasClass('loading')) {
-        wt_gfas_debug("Failsafe (15s): Field still loading after 15s, forcing initialized state:", $container.attr('class'));
-
-        if (ajaxInProgress) {
-          wt_gfas_debug("AJAX appears stuck - forcing completion after 15s");
-          ajaxInProgress = false;
-        }
-
-        // Force hide loading to ensure field is ready for validation
-        hideLoading($container, true);
-      } else if (!$container.hasClass('initialized')) {
-        wt_gfas_debug("Failsafe (15s): Field not properly marked as initialized:", $container.attr('class'));
-        $container.addClass('initialized');
-      }
-    });
-  }, 30000);
 
   $(document).on('gform_page_loaded', function(event, form_id, current_page) {
     setTimeout(function() {
@@ -1244,51 +1216,6 @@ jQuery(document).ready(function($) {
            wt_gfas_debug("GF DYNAMIC STATES: Added hidden input for " + inputName + " with value " + currentValue);
          } else {
            wt_gfas_debug("GF DYNAMIC STATES: Nuclear option FAILED - field " + inputName + " has no value: " + currentValue);
-         }
-       });
-
-       // ADDITIONAL: Check localStorage for stored values from previous steps
-       try {
-         var storedStateValue = localStorage.getItem('gf_dynamic_states_input_35.4');
-         if (storedStateValue) {
-           wt_gfas_debug("GF DYNAMIC STATES: Found localStorage value for input_35.4: " + storedStateValue);
-
-           // Add hidden input with the stored value
-           $form.find('input[type="hidden"][name="input_35.4"]').remove();
-           $('<input>')
-             .attr('type', 'hidden')
-             .attr('name', 'input_35.4')
-             .attr('value', storedStateValue)
-             .appendTo($form);
-
-           wt_gfas_debug("GF DYNAMIC STATES: Restored state field from localStorage: input_35.4 = " + storedStateValue);
-         }
-       } catch (e) {
-         wt_gfas_debug("GF DYNAMIC STATES: Error accessing localStorage:", e.message);
-       }
-
-       // CRITICAL: Check for stored values from previous steps
-       // Look for any backup fields we created during multi-step persistence
-       $form.find('input[name^="backup_input_"]').each(function() {
-         var $backup = $(this);
-         var backupName = $backup.attr('name');
-         var originalName = backupName.replace('backup_', '');
-         var backupValue = $backup.val();
-
-         if (backupValue && originalName.indexOf('35.4') !== -1) { // Check if it's our state field
-           wt_gfas_debug("GF DYNAMIC STATES: Found backup field " + backupName + " with value: " + backupValue);
-
-           // Remove any existing hidden input for the original field
-           $form.find('input[type="hidden"][name="' + originalName + '"]').remove();
-
-           // Add hidden input with the backed up value
-           $('<input>')
-             .attr('type', 'hidden')
-             .attr('name', originalName)
-             .attr('value', backupValue)
-             .appendTo($form);
-
-           wt_gfas_debug("GF DYNAMIC STATES: Restored state field from backup: " + originalName + " = " + backupValue);
          }
        });
 
