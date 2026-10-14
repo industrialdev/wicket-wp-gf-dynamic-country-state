@@ -497,22 +497,23 @@ jQuery(document).ready(function($) {
         wt_gfas_debug("GF DYNAMIC STATES: State dropdown created with " + $newStateField.find('option').length + " options");
       }
 
-      if ($newStateField.length) {
-        var selectedValue = $newStateField.val();
-        if (selectedValue) {
-          wt_gfas_debug("Ensuring selected value is properly set:", selectedValue);
-          $newStateField.find('option[value="' + selectedValue + '"]').prop('selected', true).attr('selected', 'selected');
-          $newStateField.trigger('input').trigger('change').trigger('blur');
+      try {
+        if ($newStateField.length) {
+          var selectedValue = $newStateField.val();
+          if (selectedValue) {
+            wt_gfas_debug("Ensuring selected value is properly set:", selectedValue);
+            $newStateField.find('option[value="' + selectedValue + '"]').prop('selected', true).attr('selected', 'selected');
+            $newStateField.trigger('input').trigger('change').trigger('blur');
+          } else {
+            $newStateField.trigger('input').trigger('change');
+          }
         } else {
-          $newStateField.trigger('input').trigger('change');
+          wt_gfas_debug("New state field (select) not found after replacement");
         }
-      } else {
-        wt_gfas_debug("New state field (select) not found after replacement");
+      } catch (e) {
+        // A listener throwing on these events used to skip the hide timers below (WWID-2777)
+        console.error('GF Dynamic States: listener error after state select swap', e);
       }
-
-      setTimeout(function() {
-        hideLoading($stateContainer);
-      }, 300);
     } else {
       var $originalInput = $stateContainer.data('original-input');
 
@@ -546,7 +547,12 @@ jQuery(document).ready(function($) {
 
       $stateField.replaceWith($originalInput);
 
-      $originalInput.trigger('input').trigger('change');
+      try {
+        $originalInput.trigger('input').trigger('change');
+      } catch (e) {
+        // A listener throwing on these events used to skip the hide timers below (WWID-2777)
+        console.error('GF Dynamic States: listener error after state input swap', e);
+      }
 
       var fieldId = $originalInput.attr('id');
       if (fieldId) {
@@ -756,11 +762,15 @@ jQuery(document).ready(function($) {
       error: function() {
         wt_gfas_debug("AJAX error occurred (global prefetch)");
         ajaxInProgress = false;
-        initializeForms();
-        // A failed prefetch never repopulates anything, so GF's native selects must stay usable
+        // Clear spinners first: initializeForms has nothing to hide when the cache is empty
         $('.ginput_address_country, .ginput_address_state').each(function() {
           hideLoading($(this), true);
         });
+        try {
+          initializeForms();
+        } catch (e) {
+          console.error('GF Dynamic States: initializeForms error after prefetch failure', e);
+        }
       },
       complete: function() {
         wt_gfas_debug("AJAX request complete (global prefetch) - clearing ajaxInProgress flag");
@@ -1350,14 +1360,13 @@ jQuery(document).ready(function($) {
   // Override updateStateField to include multi-step persistence
   var originalUpdateStateField = updateStateField;
   updateStateField = function($countrySelect, states) {
-    var result = originalUpdateStateField.call(this, $countrySelect, states);
-
-    // After updating state field, ensure it's persisted for multi-step
-    setTimeout(function() {
-      ensureMultiStepPersistence();
-    }, 100);
-
-    return result;
+    try {
+      return originalUpdateStateField.call(this, $countrySelect, states);
+    } finally {
+      setTimeout(function() {
+        ensureMultiStepPersistence();
+      }, 100);
+    }
   };
 });
 
