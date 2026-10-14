@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Wicket GF Dynamic Country/State
  * Description: Adds dynamic state/province dropdowns to Gravity Forms address fields
- * Version: 1.0.2
+ * Version: 1.0.3
  * Plugin URI: https://wicket.io
  * Author: Wicket Inc.
  * Author URI: https://wicket.io

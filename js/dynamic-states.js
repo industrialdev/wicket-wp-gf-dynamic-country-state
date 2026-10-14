@@ -1,5 +1,5 @@
-// Debug mode - set to true to enable console logging
-const WT_GFAS_DEBUG_MODE = false;
+// Debug mode - enable in the browser console: localStorage.setItem('gfasDebug','1') then reload
+const WT_GFAS_DEBUG_MODE = !!(window.localStorage && window.localStorage.getItem('gfasDebug'));
 
 // Run this script immediately before jQuery loads to show loading animations right away
 document.addEventListener('DOMContentLoaded', function() {
@@ -175,6 +175,10 @@ jQuery(document).ready(function($) {
     if ($container && $container.length) {
       $container.addClass('loading');
       $container.removeClass('initialized'); // Ensure initialized class is removed
+      $container.attr('data-loading-since', String(Date.now()));
+      if (WT_GFAS_DEBUG_MODE) {
+        console.log('[GFAS] showLoading on', $container.attr('class'), new Error().stack);
+      }
 
       // Don't disable the field during loading, as it can interfere with validation
       var $field = $container.find('input, select');
@@ -189,6 +193,7 @@ jQuery(document).ready(function($) {
   // Helper function to hide loading indicator
   function hideLoading($container, force) {
     if ($container && $container.length) {
+      $container.removeAttr('data-loading-since');
       // Mark as initialized first, then remove loading
       $container.addClass('initialized');
       // Short delay to ensure transitions look smooth
@@ -1038,26 +1043,27 @@ jQuery(document).ready(function($) {
   setInterval(function() {
     $('.ginput_address_country, .ginput_address_state').each(function() {
       var $container = $(this);
+      var $field = $container.find('select, input');
 
-      if (!$container.hasClass('loading')) {
+      // Any .loading container older than 3s is orphaned: its own hide timers have fired or been skipped
+      if ($container.hasClass('loading')) {
+        var since = parseInt($container.attr('data-loading-since') || '0', 10);
+        if (since && Date.now() - since > 3000) {
+          wt_gfas_debug("Failsafe: forcing stale loading field to initialized:", $field.attr('id') || 'unnamed');
+          hideLoading($container, true);
+        }
         return;
       }
 
-      var $field = $container.find('select, input');
-      if ($field.length) {
-        var fieldValue = $field.val();
-        var hasOptions = $field.is('select') && $field.find('option').length > 1;
-
-        if (fieldValue || hasOptions || $field.is('input')) {
-          wt_gfas_debug("Failsafe: forcing stuck loading field to initialized:", $field.attr('id') || 'unnamed');
-          if (ajaxInProgress) {
-            ajaxInProgress = false;
-          }
-          hideLoading($container, true);
+      // Containers with neither class paint the pre-load spinner via :not(.initialized) forever
+      if (!$container.hasClass('initialized') && $field.length) {
+        var ready = $field.is('input') || ($field.is('select') && $field.find('option').length > 1);
+        if (ready && !$field.prop('disabled')) {
+          $container.addClass('initialized');
         }
       }
     });
-  }, 5000);
+  }, 1000);
 
   $(document).on('gform_page_loaded', function(event, form_id, current_page) {
     setTimeout(function() {
@@ -1270,36 +1276,44 @@ jQuery(document).ready(function($) {
       var $field = $(this);
       var fieldValue = $field.val();
 
-            if (fieldValue) {
-        wt_gfas_debug("Multi-step: Triggering change event for field " + $field.attr('id') + " with value: " + fieldValue);
+      if (!fieldValue) {
+        return;
+      }
 
-        // Ensure the value is properly set in the DOM
+      var $form = $field.closest('form');
+      var inputName = $field.attr('name');
+      var $backup = inputName && $form.length ? $form.find('input[name="backup_' + inputName + '"]') : $();
+      var alreadySelected = !$field.is('select') || !!($field.find('option[value="' + fieldValue + '"]').prop('selected'));
+
+      // Announcing an already-stable field re-fires this function through the
+      // stateTracking change handler: an unbounded event loop that starves the
+      // main thread (~10k events/s measured on WWID-2777) and holds the spinner.
+      if (alreadySelected && $backup.length && $backup.val() === fieldValue) {
+        return;
+      }
+
+      if (!alreadySelected) {
         $field.val(fieldValue);
         if ($field.is('select')) {
           $field.find('option[value="' + fieldValue + '"]').prop('selected', true).attr('selected', 'selected');
         }
-
-        // Trigger basic events (avoid problematic GF functions)
-        $field.trigger('input');
-        $field.trigger('change');
-
-        // Create a hidden backup field to ensure value submission
-        var $form = $field.closest('form');
-        var inputName = $field.attr('name');
-        if (inputName && $form.length) {
-          // Remove any existing backup
-          $form.find('input[name="backup_' + inputName + '"]').remove();
-
-          // Add hidden backup field
-          $('<input>')
-            .attr('type', 'hidden')
-            .attr('name', 'backup_' + inputName)
-            .attr('value', fieldValue)
-            .appendTo($form);
-
-          wt_gfas_debug("Multi-step: Added backup field for " + inputName + " = " + fieldValue);
-        }
       }
+
+      if ($backup.length) {
+        $backup.val(fieldValue);
+      } else if (inputName && $form.length) {
+        $('<input>')
+          .attr('type', 'hidden')
+          .attr('name', 'backup_' + inputName)
+          .attr('value', fieldValue)
+          .appendTo($form);
+      }
+
+      wt_gfas_debug("Multi-step: persisted " + inputName + " = " + fieldValue);
+
+      // Trigger basic events (avoid problematic GF functions)
+      $field.trigger('input');
+      $field.trigger('change');
     });
   }
 
@@ -1352,10 +1366,8 @@ jQuery(document).ready(function($) {
     }, 100);
   });
 
-  // Call persistence function periodically to ensure values are maintained
-  setInterval(function() {
-    ensureMultiStepPersistence();
-  }, 5000);
+  // Persistence runs event-driven (state change, step navigation, page load).
+  // A periodic re-run here fed the unbounded event loop removed with WWID-2777.
 
   // Override updateStateField to include multi-step persistence
   var originalUpdateStateField = updateStateField;
